@@ -1,8 +1,14 @@
-#include <Arduino.h>
-#include <SPI.h>
+// Created: 2024-03-01
+// Last Modified: 2024-03-01
+// Created by: Daniel Kern (NullString1)
+// Description: Port of VAG_CDC by shyd for ESP32. Emulates CD changer for vw/audi/skoda/seat head units.
+// Related Projects: tomaskovacik/vwcdavr shyd/avr-raspberry-pi-vw-beta-vag-cdc-faker  k9spud/vwcdpic
+// License: GPL-3.0 license
+// Version: 1.0
+// Website: https://nullstring.one
+// Repository: https://github.com/NullString1/VWCDC
 
 // #define DEBUG
-
 #define RADIO_OUT 17
 #define CDC_PREFIX1 0x53
 #define CDC_PREFIX2 0x2C
@@ -27,6 +33,9 @@
 #define MODE_PLAY 0xFF
 #define MODE_SHFFL 0x55
 #define MODE_SCAN 0x00
+
+#include <Arduino.h>
+#include <SPI.h>
 
 volatile uint16_t capTimeHigh = 0;
 volatile uint16_t capTimeLow = 0;
