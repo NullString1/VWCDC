@@ -1,8 +1,9 @@
 #include <Arduino.h>
 #include <SPI.h>
 
-#define RADIO_OUT 17
+// #define DEBUG
 
+#define RADIO_OUT 17
 #define CDC_PREFIX1 0x53
 #define CDC_PREFIX2 0x2C
 
@@ -27,30 +28,33 @@
 #define MODE_SHFFL 0x55
 #define MODE_SCAN 0x00
 
-uint16_t capTimeHigh = 0;
-uint16_t capTimeLow = 0;
-uint32_t cmd = 0;
+volatile uint16_t capTimeHigh = 0;
+volatile uint16_t capTimeLow = 0;
+volatile uint32_t cmd = 0;
 
-struct flags {
-  union {
+struct flags
+{
+  union
+  {
     unsigned char value;
-    struct {
-      unsigned startCapturing:1;
-      unsigned capturingBytes:1;
-      unsigned newCMD:1;
-      unsigned shutdownPending:1;
-      unsigned bitsCaptured:8;
+    struct
+    {
+      unsigned startCapturing : 1;
+      unsigned capturingBytes : 1;
+      unsigned newCMD : 1;
+      unsigned shutdownPending : 1;
+      unsigned bitsCaptured : 8;
     };
   };
 } __attribute__((packed));
 
-struct flags f;
+volatile struct flags f;
 
 uint8_t getCommand(uint32_t cmd);
 
-volatile uint8_t cd;
-volatile uint8_t tr;
-volatile uint8_t mode;
+uint8_t cd;
+uint8_t tr;
+uint8_t mode;
 
 hw_timer_t *timer1;
 
@@ -76,7 +80,6 @@ void IRAM_ATTR INT0_vect() // remote signals
     {
       f.startCapturing = 0;
       f.capturingBytes = 1;
-      // uart_puts("startseq found\r\n");
     }
     else if (f.capturingBytes && capTimeLow > 1500)
     {
@@ -125,19 +128,19 @@ uint8_t spi_xmit(uint8_t val)
 void send_package(uint8_t c0, uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4, uint8_t c5, uint8_t c6, uint8_t c7)
 {
   spi_xmit(c0);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c1);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c2);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c3);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c4);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c5);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c6);
-  delay_ms(874);
+  delayMicroseconds(874);
   spi_xmit(c7);
 }
 
@@ -147,13 +150,23 @@ void setup()
   tr = 0xFF;
   mode = 0xFF;
 
+#ifdef DEBUG
+  Serial.begin(9600);
+#endif
+
   // init SPI
   SPI.begin(SCK, MISO, MOSI, SS);
 
-  // beta commands -> cdc
+  // init timer for decooding input signal
   timer1 = timerBegin(0, 80, true); // timer1 1us tick
 
+  // attach interrupt to listen to radio out signal
+  pinMode(RADIO_OUT, INPUT);
   attachInterrupt(RADIO_OUT, INT0_vect, CHANGE); // INT0 on pin 17 any logical change
+
+#ifdef DEBUG
+  Serial.println("Begun timer and attached interrupt");
+#endif
 
   send_package(0x74, 0xBE, 0xFE, 0xFF, 0xFF, 0xFF, 0x8F, 0x7C); // idle
   delay_ms(10);
@@ -161,12 +174,19 @@ void setup()
   delay_ms(100);
   send_package(0x74, 0xBE, 0xFE, 0xFF, 0xFF, 0xFF, 0x8F, 0x7C); // idle
   delay_ms(10);
+
+#ifdef DEBUG
+  Serial.println("Sent idle/load/idle commands");
+#endif
 }
 
 void loop()
 {
-  //                disc  trk  min  sec
-  // send_package(0x34,cd,tr,0xFF,0xFF,0xFF,0xCF,0x3C);
+//                disc  trk  min  sec
+// send_package(0x34,cd,tr,0xFF,0xFF,0xFF,0xCF,0x3C);
+#ifdef DEBUG
+  Serial.println("Sent play command");
+#endif
   send_package(0x34, cd, tr, 0xFF, 0xFF, mode, 0xCF, 0x3C);
   delay_ms(41);
   if (f.newCMD)
