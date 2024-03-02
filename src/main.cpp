@@ -4,7 +4,7 @@
 // Description: Port of VAG_CDC by shyd for ESP32. Emulates CD changer for vw/audi/skoda/seat head units.
 // Related Projects: tomaskovacik/vwcdavr shyd/avr-raspberry-pi-vw-beta-vag-cdc-faker  k9spud/vwcdpic
 // License: GPL-3.0 license
-// Version: 1.0
+// Version: 1.1
 // Website: https://nullstring.one
 // Repository: https://github.com/NullString1/VWCDC
 
@@ -202,12 +202,41 @@ void loop()
   {
     f.newCMD = 0;
     uint8_t c = getCommand(cmd);
+    switch (c)
+    {
+    case CDC_CD1:
+    case CDC_CD2:
+    case CDC_CD3: 
+    case CDC_CD4: 
+    case CDC_CD5: 
+    case CDC_CD6:
+      cd = c;
+      break;
+    
+    case CDC_STOP: 
+    case CDC_PLAY_NORMAL: 
+    case CDC_PLAY:
+      mode = c;
+      break;
+
+    case CDC_NEXT:  
+      tr++;
+      break;
+
+    case CDC_PREV:  
+      tr--;
+      break; 
+      
+    default:
+      break;
+    }
   }
 }
 uint8_t getCommand(uint32_t cmd)
 {
-  if (((cmd >> 24) & 0xFF) == CDC_PREFIX1 && ((cmd >> 16) & 0xFF) == CDC_PREFIX2)
-    if (((cmd >> 8) & 0xFF) == (0xFF ^ ((cmd) & 0xFF)))
-      return (cmd >> 8) & 0xFF;
+  //0x53, 0x2C, 0x2C, 0xD3
+  if (((cmd >> 24) & 0xFF) == CDC_PREFIX1 && ((cmd >> 16) & 0xFF) == CDC_PREFIX2) // if 1st byte is 0x53 and 2nd byte is 0x2C
+    if (((cmd >> 8) & 0xFF) == (0xFF ^ ((cmd) & 0xFF))) // if 3rd byte is inverse of 4th byte
+      return (cmd >> 8) & 0xFF;                        // return 3rd byte
   return 0;
 }
