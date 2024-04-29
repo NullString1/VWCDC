@@ -36,10 +36,15 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <BleKeyboard.h>
+#include <NimBLEDevice.h>
+
+BleKeyboard bleKeyboard("NSMusic", "NullString1", 100);
 
 volatile uint16_t capTimeHigh = 0;
 volatile uint16_t capTimeLow = 0;
 volatile uint32_t cmd = 0;
+volatile long prevMillis = 0;
 
 struct flags
 {
@@ -64,12 +69,11 @@ uint8_t getCommand(uint32_t cmd);
 uint8_t cd;
 uint8_t tr;
 uint8_t mode;
-
 hw_timer_t *timer1;
 
-void delay_ms(uint32_t us)
+void delay_ms(uint32_t ms)
 {
-  delayMicroseconds(us * 1000);
+  delayMicroseconds(ms * 1000);
 }
 
 void IRAM_ATTR INT0_vect() // remote signals
@@ -121,60 +125,53 @@ void IRAM_ATTR INT0_vect() // remote signals
   }
 }
 
-uint8_t spi_xmit(uint8_t val)
-{
-  // SPI Type: Master
-  // SPI Clock Rate: 62,500 kHz
-  // SPI Clock Phase: Cycle Start
-  // SPI Clock Polarity: Low
-  // SPI Data Order: MSB First
-  SPI.beginTransaction(SPISettings(62500, MSBFIRST, SPI_MODE1));
-  SPI.transfer(val);
-  SPI.endTransaction();
-  return val;
-}
-
 void send_package(uint8_t c0, uint8_t c1, uint8_t c2, uint8_t c3, uint8_t c4, uint8_t c5, uint8_t c6, uint8_t c7)
 {
-  spi_xmit(c0);
+  SPI.beginTransaction(SPISettings(62500, MSBFIRST, SPI_MODE1));
+  SPI.transfer(c0);
   delayMicroseconds(874);
-  spi_xmit(c1);
+  SPI.transfer(c1);
   delayMicroseconds(874);
-  spi_xmit(c2);
+  SPI.transfer(c2);
   delayMicroseconds(874);
-  spi_xmit(c3);
+  SPI.transfer(c3);
   delayMicroseconds(874);
-  spi_xmit(c4);
+  SPI.transfer(c4);
   delayMicroseconds(874);
-  spi_xmit(c5);
+  SPI.transfer(c5);
   delayMicroseconds(874);
-  spi_xmit(c6);
+  SPI.transfer(c6);
   delayMicroseconds(874);
-  spi_xmit(c7);
+  SPI.transfer(c7);
+  SPI.endTransaction();
 }
 
 void setup()
 {
-  cd = 0xBE;
-  tr = 0xFF;
-  mode = 0xFF;
+  cd = 1;
+  tr = 1;
+  mode = MODE_PLAY;
 
 #ifdef DEBUG
   Serial.begin(9600);
 #endif
 
+  delay(1000); // 1000ms wait for radio to boot
+
   // init SPI
   SPI.begin(SCK, MISO, MOSI, SS);
 
-  // init timer for decooding input signal
+  // init timer for decoding input signal
   timer1 = timerBegin(0, 80, true); // timer1 1us tick
 
   // attach interrupt to listen to radio out signal
   pinMode(RADIO_OUT, INPUT);
   attachInterrupt(RADIO_OUT, INT0_vect, CHANGE); // INT0 on pin 17 any logical change
 
+  bleKeyboard.begin();
+
 #ifdef DEBUG
-  Serial.println("Begun timer and attached interrupt");
+  Serial.println("Begun timer, attached interrupt, started BLE keyboard");
 #endif
 
   send_package(0x74, 0xBE, 0xFE, 0xFF, 0xFF, 0xFF, 0x8F, 0x7C); // idle
@@ -187,56 +184,108 @@ void setup()
 #ifdef DEBUG
   Serial.println("Sent idle/load/idle commands");
 #endif
+  if (bleKeyboard.isConnected())
+    bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
 }
 
 void loop()
 {
-//                disc  trk  min  sec
-// send_package(0x34,cd,tr,0xFF,0xFF,0xFF,0xCF,0x3C);
 #ifdef DEBUG
-  Serial.println("Sent play command");
+  // Serial.println("Sent play command");
 #endif
-  send_package(0x34, cd, tr, 0xFF, 0xFF, mode, 0xCF, 0x3C);
-  delay_ms(41);
-  if (f.newCMD)
+  if ((millis() - prevMillis) > 50)
+  {
+    //                  disc      trk         min  sec
+    send_package(0x34, 0xBF ^ cd, 0xFF ^ tr, 0xFF, 0xFF, mode, 0xCF, 0x3C);
+    prevMillis = millis(); // reset timer
+  }
+  if (f.newCMD) // if new command received from radio
   {
     f.newCMD = 0;
-    uint8_t c = getCommand(cmd);
+    uint8_t c = getCommand(cmd); // decode command
+#ifdef DEBUG
+    Serial.print(cmd, HEX);
+    Serial.print(" ");
+    Serial.println(c, HEX);
+#endif
     switch (c)
     {
     case CDC_CD1:
     case CDC_CD2:
-    case CDC_CD3: 
-    case CDC_CD4: 
-    case CDC_CD5: 
+    case CDC_CD3:
+    case CDC_CD4:
+    case CDC_CD5:
     case CDC_CD6:
       cd = c;
+#ifdef DEBUG
+      Serial.println("CD command received");
+#endif
       break;
-    
-    case CDC_STOP: 
-    case CDC_PLAY_NORMAL: 
+
+    case CDC_STOP:
+    case CDC_PLAY_NORMAL:
     case CDC_PLAY:
       mode = c;
+      if (bleKeyboard.isConnected())
+        bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+#ifdef DEBUG
+      Serial.println("Play/Stop command received");
+#endif
       break;
 
-    case CDC_NEXT:  
+    case CDC_NEXT:
+      mode = CDC_NEXT;
+      if (bleKeyboard.isConnected())
+        bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
       tr++;
+#ifdef DEBUG
+      Serial.println("Next command received");
+#endif
       break;
 
-    case CDC_PREV:  
+    case CDC_PREV:
+      mode = CDC_PREV;
+      if (bleKeyboard.isConnected())
+        bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
       tr--;
-      break; 
-      
+#ifdef DEBUG
+      Serial.println("Prev command received");
+#endif
+      break;
+
     default:
       break;
     }
   }
+#ifdef DEBUG
+  if (Serial.available() && bleKeyboard.isConnected()) // Allow for media control via serial for testing of BLE control
+  {
+    char c = Serial.read();
+    switch (c)
+    {
+    case 'p':
+      bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+      break;
+    case 'n':
+      bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
+      break;
+    case 'l':
+      bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
+      break;
+    case 'm':
+      bleKeyboard.write(KEY_MEDIA_CONSUMER_CONTROL_CONFIGURATION);
+      break;
+    default:
+      break;
+    }
+  }
+#endif
 }
 uint8_t getCommand(uint32_t cmd)
 {
-  //0x53, 0x2C, 0x2C, 0xD3
+  // 0x53, 0x2C, 0x2C, 0xD3
   if (((cmd >> 24) & 0xFF) == CDC_PREFIX1 && ((cmd >> 16) & 0xFF) == CDC_PREFIX2) // if 1st byte is 0x53 and 2nd byte is 0x2C
-    if (((cmd >> 8) & 0xFF) == (0xFF ^ ((cmd) & 0xFF))) // if 3rd byte is inverse of 4th byte
-      return (cmd >> 8) & 0xFF;                        // return 3rd byte
+    if (((cmd >> 8) & 0xFF) == (0xFF ^ ((cmd) & 0xFF)))                           // if 3rd byte is inverse of 4th byte
+      return (cmd >> 8) & 0xFF;                                                   // return 3rd byte as packet is valid
   return 0;
 }
