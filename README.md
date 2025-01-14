@@ -110,6 +110,7 @@ Connect ESP32 to radio following the wiring diagram
   <summary>Tested</summary>
   
   - RCD200 mp3 (VW POLO 2008)
+  - Seat Audio System Aura CD2 (Seat Toledo II (2004)) - Credit to [@Ammar1605](https://github.com/Ammar1605)
 </details>
 <details>
   <summary>Unverified</summary>
