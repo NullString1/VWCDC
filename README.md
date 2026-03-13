@@ -98,9 +98,9 @@ Connect ESP32 to radio following the wiring diagram
 
 | Name             | ESP32 Pin | Radio Pin | Purpose                  |
 |------------------|-----------|-----------|--------------------------|
-| SCLK             | 18        | CDC CLOCK | SPI Clock Signal 62.5MHz |
+| SCLK             | 18        | CDC CLOCK | SPI Clock Signal 62.5kHz |
 | MOSI             | 23        | DATA IN   | Data from ESP to radio   |
-| ~~MISO / Radio Out~~ | ~~17~~       | ~~DATA OUT~~  | ~~Data from radio to ESP~~ (Currently Removed)  |
+| DATA OUT         | 4         | DATA OUT  | Radio button input       |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
