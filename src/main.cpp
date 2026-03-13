@@ -103,6 +103,7 @@
 // - Not used by default Arduino functions
 // - Supports RTC wakeup (not needed here but good to have)
 #define RADIO_OUT_PIN 4
+#define LED_PIN 2
 
 // =============================================================================
 // INCLUDES
@@ -549,6 +550,10 @@ void setup() {
   tr = 1;
   mode = MODE_PLAY;
 
+  // LED pin for status indication
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);  // LED on during init
+
 #ifdef DEBUG
   // Start serial for debugging - only needed during development
   Serial.begin(9600);
@@ -570,7 +575,9 @@ void setup() {
   
   // Step 1: Send idle packet - "I'm here but not doing anything"
   // Format: 0x74, 0xBE, 0xFE, 0xFF, 0xFF, 0xFF, 0x8F, 0x7C
+  digitalWrite(LED_PIN, LOW);  // LED off during SPI
   send_package(0x74, 0xBE, 0xFE, 0xFF, 0xFF, 0xFF, 0x8F, 0x7C);
+  digitalWrite(LED_PIN, HIGH);
   delayMicroseconds(10000);
   
   // Step 2: Send "load disc" packet - simulates disc being inserted
