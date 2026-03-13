@@ -112,6 +112,7 @@
 #include <driver/rmt.h>           // ESP32 RMT peripheral
 #include <freertos/FreeRTOS.h>   // FreeRTOS for tasks/queues
 #include <freertos/queue.h>      // Queue implementation
+#include <BleKeyboard.h>          // BLE Keyboard library
 
 // =============================================================================
 // DEBUG MACROS
@@ -152,6 +153,10 @@ uint8_t mode = MODE_PLAY;  // Current playback mode
 // them here, then the main loop processes them. This prevents blocking the
 // RMT peripheral.
 QueueHandle_t cmd_queue;
+
+// BLE Keyboard for media control - presents as a BLE keyboard to the phone
+// Allows radio buttons to control phone media playback
+BleKeyboard bleKeyboard("VWCDC", "NullString1", 100);
 
 // =============================================================================
 // FUNCTION: send_package
@@ -467,26 +472,35 @@ void process_command(uint8_t cmd) {
       DEBUG_PRINTLN(cd);
       break;
 
-    // Play commands - could start Bluetooth playback
+    // Play/Pause - toggle media playback on phone via BLE
     case CDC_STOP:
     case CDC_PLAY_NORMAL:
     case CDC_PLAY:
       mode = MODE_PLAY;
-      DEBUG_PRINTLN("Play");
+      if (bleKeyboard.isConnected()) {
+        bleKeyboard.write(KEY_MEDIA_PLAY_PAUSE);
+      }
+      DEBUG_PRINTLN("Play/Pause");
       break;
 
-    // Next track - could send next track command to BT
+    // Next track - skip to next track on phone
     case CDC_NEXT:
       tr++;
       if (tr > 99) tr = 1;
+      if (bleKeyboard.isConnected()) {
+        bleKeyboard.write(KEY_MEDIA_NEXT_TRACK);
+      }
       DEBUG_PRINT("Next track: ");
       DEBUG_PRINTLN(tr);
       break;
 
-    // Previous track
+    // Previous track - go to previous track on phone
     case CDC_PREV:
       if (tr == 1) tr = 99;
       else tr--;
+      if (bleKeyboard.isConnected()) {
+        bleKeyboard.write(KEY_MEDIA_PREVIOUS_TRACK);
+      }
       DEBUG_PRINT("Prev track: ");
       DEBUG_PRINTLN(tr);
       break;
@@ -584,6 +598,11 @@ void setup() {
   delayMicroseconds(10000);
 
   DEBUG_PRINTLN("Init sequence complete");
+
+  // Initialize BLE keyboard for media control
+  DEBUG_PRINTLN("Starting BLE keyboard...");
+  bleKeyboard.begin();
+  DEBUG_PRINTLN("BLE keyboard started");
 
   // Initialize RMT for receiving button commands
   setup_rmt_input();
